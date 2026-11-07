@@ -1,0 +1,11 @@
+streamlit>=1.39.0
+qdrant-client>=1.7.0
+ollama>=0.1.0
+groq>=0.4.0
+yt-dlp>=2025.01.01
+youtube-transcript-api>=0.6.0
+pdf2image>=1.17.0
+pillow>=10.0.0
+fastembed
+requests>=2.31.0
+faster-whisper>=1.0.3

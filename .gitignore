@@ -1,0 +1,54 @@
+# ============================================================
+# SEGREDOS — nunca publique
+# ============================================================
+.env
+.env.*
+!.env.example
+
+# ============================================================
+# CONTEÚDO DOS ACERVOS (dados de cada instalação; muitos são protegidos por direitos autorais)
+# ============================================================
+
+# PDFs (ex.: Atlas Brasileiro, conteúdo pago) e as cópias servidas pelo app
+documentos_pdf/
+static/pdfs/
+
+# Legendas, transcrições e áudios baixados ou gerados
+legendas*/
+data/transcricoes_whisper/
+data/uploads/
+data/audio_tmp/
+data/entrada/*
+!data/entrada/.gitkeep
+
+# Backups do Qdrant: os snapshots contêm o TEXTO de todos os trechos indexados
+backups/
+*.snapshot
+
+# Configuração e estado de cada instalação (criados pelo próprio sistema)
+data/colecoes.json
+data/atualizacoes.json
+data/pendencias.json
+data/glossarios.json
+data/tarefas/
+
+# Modelos baixados (o Whisper "medium" sozinho tem 1,5 GB)
+data/modelos_whisper/
+
+# ============================================================
+# PYTHON / EDITORES / SISTEMA
+# ============================================================
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+*.backup
+*.bak
+arquivos.txt

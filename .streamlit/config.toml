@@ -1,0 +1,8 @@
+[server]
+# Permite abrir os PDFs do acervo direto na página certa:
+# arquivos em ./static/pdfs/ ficam em http://localhost:8501/app/static/pdfs/...
+enableStaticServing = true
+
+[client]
+# A navegação é feita por links próprios (Oráculo <-> Administração).
+showSidebarNavigation = false

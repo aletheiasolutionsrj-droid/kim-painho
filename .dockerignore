@@ -1,0 +1,22 @@
+# Arquivos que não precisam entrar na imagem do Docker (deixam a construção bem mais rápida)
+.git
+.gitignore
+.gitattributes
+.env
+README.md
+__pycache__
+*.pyc
+.venv
+.vscode
+.idea
+
+# Dados de cada instalação (ficam no volume, não na imagem)
+backups
+documentos_pdf
+static/pdfs
+legendas*
+data/modelos_whisper
+data/uploads
+data/transcricoes_whisper
+data/audio_tmp
+data/tarefas

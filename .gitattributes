@@ -1,0 +1,7 @@
+# Garante que scripts de shell terminem linha com LF (no Windows, o Git pode trocar por CRLF
+# e o container Linux deixa de conseguir executá-los).
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.png binary
+*.pdf binary
