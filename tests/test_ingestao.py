@@ -152,9 +152,10 @@ class FakeQdrant:
         for pid, _, _ in self._filtrados(collection_name, points_selector.filter):
             del self.colecoes[collection_name]["pontos"][pid]
 
-    def scroll(self, collection_name, limit=100, offset=None, with_payload=True, with_vectors=False):
-        itens = list(self.colecoes[collection_name]["pontos"].items())
-        pontos = [types.SimpleNamespace(id=i, payload=pl) for i, (_, pl) in itens]
+    def scroll(self, collection_name, limit=100, offset=None, with_payload=True, with_vectors=False,
+               scroll_filter=None):
+        itens = [(pid, pl) for pid, _, pl in self._filtrados(collection_name, scroll_filter)]
+        pontos = [types.SimpleNamespace(id=i, payload=pl) for i, pl in itens]
         return pontos, None
 
     def set_payload(self, collection_name, payload, points, wait=True):

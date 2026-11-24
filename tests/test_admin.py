@@ -319,6 +319,16 @@ class DepsFalsas:
         self.audios.append(caminho)
         return caminho
 
+    def cortar_video(self, video_id, inicio, fim, pasta, nome, altura, progresso=None):
+        self.cortes_pedidos = getattr(self, "cortes_pedidos", [])
+        self.cortes_pedidos.append((video_id, inicio, fim, nome, altura))
+        Path(pasta).mkdir(parents=True, exist_ok=True)
+        caminho = Path(pasta) / f"{nome}.mp4"
+        caminho.write_bytes(b"video")
+        if progresso:
+            progresso(0.5)
+        return caminho
+
     def transcrever(self, caminho, **kw):
         self.whisper_chamadas.append(kw)
         kw["progresso"](30, 60)
@@ -334,6 +344,11 @@ def ambiente():
     executores.PASTA_TRANSCRICOES = d / "transcricoes"
     executores.PASTA_AUDIO_TEMP = d / "audio"
     arquivos.PASTA_PDFS = d / "pdfs"
+
+    from admin import cortes
+    cortes.PASTA_CORTES = d / "cortes"
+    cortes.PASTA_CACHE_LEGENDAS = d / "legendas_cache"
+    cortes.PASTA_TRANSCRICOES = d / "transcricoes"
 
     from admin import atualizacoes
     atualizacoes.ARQUIVO_PADRAO = d / "atualizacoes.json"
@@ -972,6 +987,45 @@ def _atualizacao_diaria(d, f, pasta, arq):
     # excluir
     atualizacoes.remover(a["id"], arq)
     assert atualizacoes.ler(arq) == []
+
+
+def teste_cortar_video_gera_video_e_legenda_deslocada():
+
+    d, f = ambiente()
+
+    params = {"video_id": "AAAAAAAAAAA", "titulo": "Aula Sobre Política", "inicio": 10, "fim": 30, "altura": 480}
+    t = rodar(d, "cortar_video", params)
+    r = t["resultado"]
+
+    assert t["status"] == "concluida", t
+    assert f.cortes_pedidos == [("AAAAAAAAAAA", 10.0, 30.0, r["nome"], 480)]
+    assert r["nome"] == "aula-sobre-politica_AAAAAAAAAAA_00h00m10s-00h00m30s"
+    assert r["arquivo"] == r["nome"] + ".mp4" and (d / "cortes" / r["arquivo"]).exists()
+    assert r["duracao"] == 20.0 and r["legenda_fonte"] == "youtube"
+
+    srt = (d / "cortes" / r["legenda"]).read_text(encoding="utf-8")
+    assert srt.startswith("1\n00:00:00,000 --> 00:00:02,000\nEsta é a frase número 3 ")   # fala de 9–12 s, cortada em 10 s
+    assert srt.count(" --> ") == 7 and "00:00:17,000 --> 00:00:20,000" in srt     # termina em 20 s (trecho de 20 s)
+
+    # o fim tem de ser maior que o início
+    t = rodar(d, "cortar_video", {**params, "inicio": 30, "fim": 30})
+    assert t["status"] == "erro" and "maior que o início" in t["erro"]
+
+
+def teste_cortar_video_sem_legenda_ainda_entrega_o_video():
+
+    from admin import cortes
+
+    d, f = ambiente()
+    f.sem_legenda = {"BBBBBBBBBBB"}
+
+    t = rodar(d, "cortar_video", {"video_id": "BBBBBBBBBBB", "titulo": "x", "inicio": 0, "fim": 5})
+    r = t["resultado"]
+
+    assert t["status"] == "concluida" and r["arquivo"] and r["legenda"] is None
+
+    [c] = cortes.listar_cortes(d / "cortes")
+    assert c["nome"] == r["nome"] and c["legenda"] is None and c["tamanho"] == 5
 
 
 def teste_whisper_escolhe_cpu_int8_sem_gpu_e_reaproveita_o_modelo():

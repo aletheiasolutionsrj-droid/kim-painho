@@ -22,6 +22,7 @@ import test_admin as ta                                            # noqa: E402
 from fake_streamlit import ArquivoEnviado, Parar                   # noqa: E402
 
 from admin import atualizacoes, catalogo, executores, pendencias, tarefas, worker    # noqa: E402
+from admin.telas import cortes_ui                                   # noqa: E402
 from admin.telas import (                                          # noqa: E402
     acervos, adicionar, atualizacao_ui, backup_ui, comum, documentos, saude_ui, tarefas_ui
 )
@@ -1004,6 +1005,143 @@ def teste_importar_pasta_fora_do_projeto_e_recusada():
     tela(adicionar.pagina_youtube)
 
     assert any("não encontrada" in w for w in st.textos("warning"))
+
+
+# ============================================================
+# EDITOR DE CORTES
+# ============================================================
+
+def _componente_falso(retorno):
+    """Instala streamlit.components.v1 de mentira; devolve a lista das chamadas ao player."""
+
+    chamadas = []
+
+    def declare_component(nome, path=None):
+        chamadas.append(("declarado", nome, path))
+        return lambda **kw: chamadas.append(("chamado", kw)) or retorno(kw)
+
+    v1 = types.ModuleType("streamlit.components.v1")
+    v1.declare_component = declare_component
+    pacote = types.ModuleType("streamlit.components")
+    pacote.v1 = v1
+    sys.modules["streamlit.components"] = pacote
+    sys.modules["streamlit.components.v1"] = v1
+    cortes_ui._componente = None
+
+    return chamadas
+
+
+def teste_editor_de_cortes_sem_video_e_com_video():
+
+    from admin import cortes
+
+    d, f = montar()
+    cortes.PASTA_CORTES = d / "cortes"
+    cortes.PASTA_CORTES.mkdir()
+
+    chamadas = _componente_falso(lambda kw: {"inicio": 10.0, "fim": 70.0, "duracao_video": 600, "chave": kw["chave"]})
+
+    # sem vídeo: abre a página com orientação e sem player
+    runpy.run_path(str(RAIZ / "pages" / "2_Editor_de_cortes.py"))
+    assert any("Editor de cortes" in t for t in st.textos("title"))
+    assert "Voltar ao Oráculo" in st.textos("button")
+    assert any("Abra um vídeo" in t for t in st.textos("info")) and not chamadas
+
+    # link de vídeo digitado
+    st.reset()
+    st.valores.update({"corte_link": "https://youtu.be/AAAAAAAAAAA?t=95"})
+    st.cliques.add("corte_abrir")
+    tela(cortes_ui)
+    assert st.session_state["corte_video"]["video_id"] == "AAAAAAAAAAA"
+    assert st.session_state["corte_video"]["posicao"] == 95
+
+    # com vídeo: player recebe a posição; legenda e corte
+    cortes.segmentos_do_video = lambda vid, col=None, q=None, **k: (
+        [{"start": a, "duration": b - a, "text": t} for a, b, t in
+         [(5.0, 9.0, "antes"), (12.0, 15.0, "dentro um"), (30.0, 33.0, "dentro dois"), (90.0, 95.0, "depois")]], "youtube")
+
+    st.session_state["corte_video"] = {"video_id": "AAAAAAAAAAA", "titulo": "Aula 1", "posicao": 10, "colecao_id": "acervo_kim"}
+    st.reset()
+    tela(cortes_ui)
+
+    chamado = [c[1] for c in chamadas if c[0] == "chamado"][-1]
+    assert chamado["video_id"] == "AAAAAAAAAAA" and chamado["marcas"] == {"inicio": 10, "fim": 70}
+    assert chamadas[0][1] == "player_corte"
+
+    [srt_nome] = [k for k in f_downloads() if k.endswith(".srt")]
+    conteudo = st.downloads[srt_nome].decode()
+    assert "dentro um" in conteudo and "dentro dois" in conteudo and "antes" not in conteudo and "depois" not in conteudo
+    assert "00:00:02,000" in conteudo                      # 12 s - 10 s: tempos reiniciados
+
+    st.reset()
+    st.valores["corte_qualidade"] = "480p"
+    st.cliques.add("corte_cortar")
+    tela(cortes_ui)
+
+    [t] = [t for t in tarefas_criadas() if t["tipo"] == "cortar_video"]
+    assert t["params"]["inicio"] == 10.0 and t["params"]["fim"] == 70.0 and t["params"]["altura"] == 480
+    assert t["params"]["video_id"] == "AAAAAAAAAAA" and t["colecao_id"] == "acervo_kim"
+    assert any("na fila" in x for x in st.textos("success"))
+
+
+def f_downloads():
+
+    return list(getattr(st, "downloads", {}))
+
+
+def teste_editor_de_cortes_lista_e_exclui_cortes_prontos():
+
+    from admin import cortes
+
+    d, f = montar()
+    cortes.PASTA_CORTES = d / "cortes"
+    cortes.PASTA_CORTES.mkdir()
+    (cortes.PASTA_CORTES / "aula_AAAAAAAAAAA_00h00m10s-00h01m10s.mp4").write_bytes(b"x" * 2048)
+    (cortes.PASTA_CORTES / "aula_AAAAAAAAAAA_00h00m10s-00h01m10s.srt").write_text("1\n", encoding="utf-8")
+
+    _componente_falso(lambda kw: None)
+    st.downloads = {}
+    tela(cortes_ui)
+
+    assert any(k.endswith(".mp4") for k in st.downloads) and any(k.endswith(".srt") for k in st.downloads)
+
+    st.reset()
+    st.cliques.add("cdel_aula_AAAAAAAAAAA_00h00m10s-00h01m10s")
+    tela(cortes_ui)
+    assert cortes.listar_cortes() == []
+
+
+def teste_botao_cortar_nos_cartoes_de_video():
+
+    import ui
+
+    d, f = montar()
+
+    fonte = {"tipo_fonte": "video", "video_id": "AAAAAAAAAAA", "titulo_video": "Aula 1", "chunk_id": "c1",
+             "timestamp_segundos": 125, "timestamp_texto": "02:05", "url_com_minuto": "https://youtu.be/AAAAAAAAAAA?t=125"}
+
+    ui.exibir_fonte(fonte, "Fonte 1:", "acervo_kim")
+    assert "✂️ Cortar este trecho" in st.textos("button")
+
+    st.reset()
+    st.cliques.add("cortar_Fonte 1:_c1")
+
+    try:
+        ui.exibir_fonte(fonte, "Fonte 1:", "acervo_kim")
+    except Parar:
+        pass
+
+    assert st.session_state["corte_video"] == {
+        "video_id": "AAAAAAAAAAA", "titulo": "Aula 1", "posicao": 125, "colecao_id": "acervo_kim"}
+    assert ("switch_page", "pages/2_Editor_de_cortes.py") in st.saidas
+
+    # PDF e podcast não têm o botão
+    st.reset()
+    ui.exibir_fonte({"tipo_fonte": "podcast", "titulo": "Ep", "video_id": "x"}, "Fonte 2:")
+    assert "✂️ Cortar este trecho" not in st.textos("button")
+
+    # a barra lateral do Oráculo tem o botão do editor
+    assert "Editor de cortes" in (RAIZ / "app.py").read_text(encoding="utf-8")
 
 
 # ============================================================

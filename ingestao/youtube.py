@@ -252,3 +252,65 @@ def baixar_audio(video_id, pasta):
     with YoutubeDL(opcoes) as ydl:
         info = ydl.extract_info(url_do_video(video_id), download=True)
         return Path(ydl.prepare_filename(info))
+
+
+QUALIDADES = {"360p": 360, "480p": 480, "720p": 720, "1080p": 1080, "Melhor disponível": None}
+
+
+def formato_para(altura):
+    """Seletor de formato do yt-dlp: vídeo+áudio até a altura pedida (None = o melhor)."""
+
+    if not altura:
+        return "bv*+ba/b"
+
+    return f"bv*[height<={int(altura)}]+ba/b[height<={int(altura)}]/bv*+ba/b"
+
+
+def baixar_trecho(video_id, inicio, fim, pasta, nome, altura=720, progresso=None):
+    """
+    Baixa só o trecho [inicio, fim] (segundos) do vídeo, em MP4, com corte preciso
+    (o yt-dlp usa o ffmpeg, que precisa estar instalado). Devolve o caminho do arquivo.
+    progresso(percentual 0-1) é opcional.
+    """
+
+    from pathlib import Path
+    from yt_dlp import YoutubeDL
+    from yt_dlp.utils import download_range_func
+
+    pasta = Path(pasta)
+    pasta.mkdir(parents=True, exist_ok=True)
+
+    def gancho(info):
+        if progresso and info.get("status") == "downloading":
+            total = info.get("total_bytes") or info.get("total_bytes_estimate")
+            if total:
+                progresso(min(1.0, (info.get("downloaded_bytes") or 0) / total))
+
+    opcoes = dict(OPCOES_YDL)
+    opcoes.update({
+        "skip_download": False,
+        "noplaylist": True,
+        "format": formato_para(altura),
+        "merge_output_format": "mp4",
+        "download_ranges": download_range_func(None, [(float(inicio), float(fim))]),
+        "force_keyframes_at_cuts": True,
+        "outtmpl": str(pasta / f"{nome}.%(ext)s"),
+        "progress_hooks": [gancho],
+    })
+
+    with YoutubeDL(opcoes) as ydl:
+
+        info = ydl.extract_info(url_do_video(video_id), download=True)
+
+        baixados = info.get("requested_downloads") or []
+        caminho = Path(baixados[0]["filepath"]) if baixados and baixados[0].get("filepath") else None
+
+    if caminho is None or not caminho.exists():
+        candidatos = [c for c in pasta.glob(f"{nome}.*") if c.suffix.lower() not in (".part", ".srt", ".ytdl")]
+
+        if not candidatos:
+            raise RuntimeError("O yt-dlp terminou, mas o arquivo do trecho não foi encontrado.")
+
+        caminho = sorted(candidatos, key=lambda c: (c.suffix.lower() != ".mp4", c.name))[0]
+
+    return caminho

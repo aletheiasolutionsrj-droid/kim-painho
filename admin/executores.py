@@ -13,10 +13,10 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
-from ingestao import arquivos, glossario, pipeline
+from ingestao import arquivos, glossario, legenda_srt, pipeline
 from ingestao import fontes_texto, parametros as P
 
-from . import pendencias
+from . import cortes, pendencias
 from .tarefas import RAIZ
 
 PASTA_AUDIO_TEMP = RAIZ / "data" / "audio_tmp"
@@ -65,6 +65,10 @@ class Dependencias:
     def transcrever(self, caminho, **kw):
         from ingestao import whisper
         return whisper.transcrever(caminho, **kw)
+
+    def cortar_video(self, video_id, inicio, fim, pasta, nome, altura, progresso=None):
+        from ingestao import youtube
+        return youtube.baixar_trecho(video_id, inicio, fim, pasta, nome, altura, progresso)
 
     def pausa(self):
         time.sleep(random.uniform(3, 7))      # evita bloqueio de IP pelo YouTube
@@ -639,6 +643,68 @@ def transcrever_audio(params, ctx):
 # MANUTENÇÃO
 # ============================================================
 
+def cortar_video(params, ctx):
+    """
+    params: video_id, titulo, inicio, fim (segundos), altura (360/480/720/1080 ou None),
+            colecao_id (para a legenda), salvar_legenda (padrão True)
+    Gera data/cortes/<nome>.mp4 e <nome>.srt.
+    """
+
+    video_id = params["video_id"]
+    inicio, fim = float(params["inicio"]), float(params["fim"])
+
+    if inicio < 0 or fim <= inicio:
+        raise ValueError("O fim do trecho precisa ser maior que o início.")
+
+    nome = cortes.nome_do_arquivo(params.get("titulo"), video_id, inicio, fim)
+    pasta = cortes.PASTA_CORTES
+
+    resultado = {"nome": nome, "video_id": video_id, "inicio": inicio, "fim": fim,
+                 "duracao": round(fim - inicio, 1), "arquivo": None, "legenda": None, "legenda_fonte": None}
+
+    # 1) legenda (rápida; se faltar, o vídeo sai mesmo assim)
+    if params.get("salvar_legenda", True):
+
+        ctx.geral("legenda", 0, 2, "Preparando a legenda do trecho")
+
+        try:
+            segmentos, fonte = cortes.segmentos_do_video(
+                video_id, params.get("colecao_id"), deps.qdrant() if params.get("colecao_id") else None,
+                buscar_youtube=lambda v, t: deps.legenda(v, t)[0]
+            )
+            srt = legenda_srt.montar_srt(segmentos, inicio, fim, deslocar=True)
+
+            if srt:
+                pasta.mkdir(parents=True, exist_ok=True)
+                (pasta / f"{nome}.srt").write_text(srt, encoding="utf-8")
+                resultado["legenda"] = f"{nome}.srt"
+                resultado["legenda_fonte"] = fonte
+                ctx.log(f"Legenda gravada ({cortes.FONTES[fonte]}).")
+            else:
+                ctx.log("Não há falas neste intervalo: legenda não gerada.")
+
+        except cortes.SemLegenda as e:
+            ctx.log(f"Sem legenda: {e}")
+
+    ctx.verificar()
+
+    # 2) vídeo
+    ctx.geral("video", 1, 2, "Baixando e cortando o trecho (precisa de internet e do ffmpeg)")
+
+    caminho = deps.cortar_video(
+        video_id, inicio, fim, pasta, nome, params.get("altura"),
+        lambda frac: ctx.sub("video", int(frac * 100), 100, "Baixando")
+    )
+
+    ctx.verificar()
+
+    resultado["arquivo"] = Path(caminho).name
+    resultado["tamanho"] = Path(caminho).stat().st_size if Path(caminho).exists() else 0
+    ctx.log(f"Corte salvo: {resultado['arquivo']}")
+
+    return resultado
+
+
 def reparar_metadados(params, ctx):
 
     def pausa():
@@ -720,6 +786,7 @@ EXECUTORES = {
     "transcricao_arquivo": ingerir_transcricao_arquivo,
     "transcrever_audio": transcrever_audio,
     "reparar_metadados": reparar_metadados,
+    "cortar_video": cortar_video,
     "backup": backup,
     "restaurar_snapshot": restaurar_snapshot,
 }
@@ -731,6 +798,7 @@ ROTULOS = {
     "transcricao_arquivo": "Transcrição pronta",
     "transcrever_audio": "Áudio (Whisper)",
     "reparar_metadados": "Reparar datas e títulos",
+    "cortar_video": "Cortar vídeo",
     "backup": "Backup",
     "restaurar_snapshot": "Restaurar backup",
 }

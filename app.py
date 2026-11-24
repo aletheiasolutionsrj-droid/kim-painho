@@ -235,6 +235,10 @@ with st.sidebar:
     ):
         st.switch_page("pages/1_Administracao.py")
 
+    if st.button("Editor de cortes", icon="✂️", key="ir_cortes", use_container_width=True,
+                 help="Abre qualquer vídeo do YouTube num player para marcar e exportar um trecho."):
+        st.switch_page("pages/2_Editor_de_cortes.py")
+
 # --- DIVISÃO DA TELA PRINCIPAL (MAIN) ---
 
 # Header Principal
@@ -382,7 +386,7 @@ with col_fontes:
     if "fontes_carregadas" in st.session_state and st.session_state["fontes_carregadas"]:
 
         for numero, fonte in enumerate(st.session_state["fontes_carregadas"], start=1):
-            exibir_fonte(fonte, f"Fonte {numero}:")
+            exibir_fonte(fonte, f"Fonte {numero}:", colecao_selecionada_id)
 
     else:
 
@@ -428,4 +432,4 @@ with col_fontes:
         st.markdown("##### Dados não enviados para a IA")
 
         for numero, fonte in enumerate(fontes_adicionais, start=1):
-            exibir_fonte(fonte, f"Outro resultado {numero}:")
+            exibir_fonte(fonte, f"Outro resultado {numero}:", colecao_selecionada_id)

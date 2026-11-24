@@ -18,7 +18,14 @@ def descrever_resultado(tipo, r):
 
     linhas = []
 
-    if tipo == "legendas_youtube":
+    if tipo == "cortar_video":
+        linhas.append(f"Corte de **{r['duracao']} s** salvo em `data/cortes/{r['arquivo']}`.")
+        linhas.append(
+            f"Legenda: `{r['legenda']}`" if r.get("legenda") else "Sem legenda para este trecho."
+        )
+        linhas.append("Baixe o arquivo na página **Editor de cortes**.")
+
+    elif tipo == "legendas_youtube":
         linhas.append(f"{r['na_lista']} vídeo(s) na lista (links e canal).")
         linhas.append(
             f"**{r['inseridos']}** vídeo(s) incluído(s) ({r['chunks']} trechos) · "

@@ -3,6 +3,7 @@ FROM python:3.11-slim
 # 1. Instala dependências do sistema operacional necessárias para renderizar PDFs
 RUN apt-get update && apt-get install -y \
     poppler-utils \
+    ffmpeg \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

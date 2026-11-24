@@ -47,6 +47,7 @@ class FakeSt(types.ModuleType):
         self.valores.clear()
         self.reruns = 0
         self.hook_editor = None
+        self.downloads = {}
 
     def textos(self, tipo=None):
         return [t for k, t in self.saidas if tipo is None or k == tipo]
@@ -120,6 +121,7 @@ class FakeSt(types.ModuleType):
     warning = _texto("warning")
     error = _texto("error")
     code = _texto("code")
+    text = _texto("text")
     divider = _texto("divider")
 
     def metric(self, rotulo, valor=None, **kw):
@@ -152,6 +154,11 @@ class FakeSt(types.ModuleType):
         return (key in self.cliques or rotulo in self.cliques) and not disabled
 
     form_submit_button = button
+
+    def download_button(self, rotulo, data=None, file_name=None, key=None, **kw):
+        self.saidas.append(("download", f"{rotulo}|{file_name}"))
+        self.downloads[file_name] = data
+        return False
 
     def text_input(self, rotulo, value="", key=None, **kw):
         return self._valor(key, value)

@@ -265,6 +265,29 @@ class Armazenamento:
             wait=True
         )
 
+    def chunks_do_documento(self, doc_id):
+        """Payloads de todos os trechos do documento, em ordem. Sem vetores."""
+
+        pontos_todos, offset = [], None
+
+        while True:
+
+            pontos, offset = self.client.scroll(
+                collection_name=self.colecao_id,
+                scroll_filter=self._filtro_documento(doc_id),
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False
+            )
+
+            pontos_todos.extend(p.payload or {} for p in pontos)
+
+            if offset is None:
+                break
+
+        return sorted(pontos_todos, key=lambda p: p.get("chunk_index", 0))
+
     # --------------------------------------------------------
     # INVENTÁRIO
     # --------------------------------------------------------

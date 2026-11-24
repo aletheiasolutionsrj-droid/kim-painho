@@ -222,7 +222,7 @@ def exibir_localizacao_pdf(fonte):
         )
 
 
-def exibir_fonte(fonte, rotulo=None):
+def exibir_fonte(fonte, rotulo=None, colecao_id=None):
     """
     Cartão de um resultado da busca. Cobre PDF, podcast/áudio e vídeo; qualquer outro tipo
     (ou trecho sem tipo, de ingestões antigas) cai no cartão de vídeo, para nada sumir da tela.
@@ -266,6 +266,17 @@ def exibir_fonte(fonte, rotulo=None):
         if fonte.get("url_com_minuto"):
             st.link_button("▶️ Assistir no Ponto Exato", fonte["url_com_minuto"], use_container_width=True)
 
+        if fonte.get("video_id") and st.button(
+            "✂️ Cortar este trecho", use_container_width=True,
+            key=f"cortar_{rotulo or ''}_{fonte.get('chunk_id') or fonte['video_id']}",
+            help="Abre o vídeo num player em que você marca o início e o fim e exporta o corte e a legenda."
+        ):
+            st.session_state["corte_video"] = {
+                "video_id": fonte["video_id"], "titulo": titulo or "",
+                "posicao": int(fonte.get("timestamp_segundos") or 0), "colecao_id": colecao_id,
+            }
+            st.switch_page("pages/2_Editor_de_cortes.py")
+
 
 def renderizar_header():
     """Renderiza o cabeçalho principal do Kim Painho."""
@@ -283,4 +294,4 @@ def renderizar_header():
         unsafe_allow_html=True
     )
 
-    #st.divider()
+    #st.divider()
